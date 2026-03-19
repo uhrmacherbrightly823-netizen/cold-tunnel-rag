@@ -177,7 +177,7 @@ def main():
         )
         
         # 折叠式知识库编辑按钮
-        with st.expander("✏️ 编辑知识库", expanded=False):
+        with st.expander("✏️ 上传文件", expanded=False):
             new_content = st.text_area(
                 "编辑内容", 
                 value=knowledge_base, 
