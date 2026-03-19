@@ -71,11 +71,6 @@ DEFAULT_KNOWLEDGE = """## 1. 寒区隧道冻害机理
 ## 4. 防寒长度计算公式
 L = L0 + K × (T1 - T0)
 L：总防寒长度；L0：基础长度；K：修正系数；T0：环境最低温；T1：临界温度。
-
-## 5. 关角山公路隧道
-基本信息：净高5m，净宽11m，计算行车速度100km/h，行车荷载公路—Ⅰ级。左线于公路测设里程ZK207+577-ZK211+215段，全长3590m，属特长隧道；右线于公路测设里程K207+570-K211+160段，全长3638m，属特长隧道。
-该隧道所在海拔高度约3700m，属于高寒高海拔特长公路隧道，易发生冻害。隧址区域属于大陆性高原气候，具有冻结期长，日均温度低等特点。平均温度在0℃以下，历史最高气温为28℃，历史最低气温为-35.8℃。
-大风日数较多，全年平均大风日数为70天，平均风速为3.6m/s，最大风速为24m/s
 """
 
 # ====================== 知识库核心函数 ======================
@@ -167,6 +162,10 @@ def main():
     # 加载知识库
     knowledge_base = load_knowledge_base()
 
+    # 初始化聊天记录会话状态（核心：保存历史消息）
+    if "messages" not in st.session_state:
+        st.session_state.messages = []  # 格式：[{"role": "user/assistant", "content": "消息内容"}]
+
     # 左侧侧边栏（极简版）
     with st.sidebar:
         st.subheader("🔑 API配置")
@@ -177,7 +176,7 @@ def main():
         )
         
         # 折叠式知识库编辑按钮
-        with st.expander("✏️ 上传文件", expanded=False):
+        with st.expander("✏️ 编辑知识库", expanded=False):
             new_content = st.text_area(
                 "编辑内容", 
                 value=knowledge_base, 
@@ -187,34 +186,52 @@ def main():
             if st.button("💾 保存知识库"):
                 save_knowledge_base(new_content)
                 knowledge_base = new_content
+        
+        # 清空聊天记录按钮
+        if st.button("🗑️ 清空聊天记录"):
+            st.session_state.messages = []
+            st.rerun()  # 刷新页面生效
 
     # 主界面标题
     st.title("寒区隧道稳定性智能辅助判识及智能问答系统")
     st.divider()
 
+    # 渲染历史聊天记录（核心：遍历会话状态并显示）
+    for msg in st.session_state.messages:
+        with st.chat_message(msg["role"]):
+            st.markdown(msg["content"])
+
     # 聊天交互
     user_question = st.chat_input("请输入问题...")
     if user_question:
-        # 显示用户问题
+        # 1. 添加用户消息到会话状态
+        st.session_state.messages.append({"role": "user", "content": user_question})
+        # 2. 显示当前用户消息
         with st.chat_message("user"):
-            st.write(user_question)
+            st.markdown(user_question)
         
-        # 生成回答
+        # 3. 生成回答并处理
         with st.chat_message("assistant"):
             # 优先处理计算类问题
             calc_params = parse_calc_question(user_question)
             if calc_params:
                 result = calculate_cold_length(calc_params)
                 st.markdown(result)
+                # 添加助手回答到会话状态
+                st.session_state.messages.append({"role": "assistant", "content": result})
             else:
                 # 知识类问题：检查API Key + 检索知识库 + 调用API
                 if not api_key:
-                    st.warning("⚠️ 请先在左侧输入阿里云API Key")
+                    warning_msg = "⚠️ 请先在左侧输入阿里云API Key"
+                    st.warning(warning_msg)
+                    st.session_state.messages.append({"role": "assistant", "content": warning_msg})
                 else:
                     relevant_knowledge = retrieve_knowledge(user_question, knowledge_base)
                     prompt = f"请基于以下寒区隧道专业知识回答问题，要求准确、简洁：\n\n{relevant_knowledge}\n\n问题：{user_question}"
                     answer = call_qwen_api(api_key, prompt)
                     st.markdown(answer)
+                    # 添加助手回答到会话状态
+                    st.session_state.messages.append({"role": "assistant", "content": answer})
 
 if __name__ == "__main__":
     main()
